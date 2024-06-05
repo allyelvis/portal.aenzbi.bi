@@ -1,0 +1,30 @@
+{
+  "name": "bms-pos-setup",
+  "version": "1.0.0",
+  "description": "Setup script for Business Management System (Odoo) and Point of Sale (OpenBravo POS)",
+  "main": "index.js",
+  "scripts": {
+    "start": "bash setup_bms_pos.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/bms-pos-setup.git"
+  },
+  "keywords": [
+    "odoo",
+    "openbravo",
+    "pos",
+    "setup",
+    "script"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yourusername/bms-pos-setup/issues"
+  },
+  "homepage": "https://github.com/yourusername/bms-pos-setup#readme",
+  "dependencies": {
+    "some-dependency": "^1.0.0"
+  }
+}
