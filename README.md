@@ -1,4 +1,4 @@
-# Here is a `README.md` file that includes instructions for running the script and accessing the installed systems.
+Here's the `README.md` file with the server information replaced by your specified domain and IP address.
 
 ```markdown
 # Business Management System and Point of Sale Setup
@@ -46,10 +46,14 @@ This script sets up a Business Management System (Odoo) and Point of Sale (OpenB
 After the script completes, you can access Odoo at:
 
 ```
-http://<your-server-ip>:8069
+http://portal.aenzbi.bi:8069
 ```
 
-Replace `<your-server-ip>` with the IP address of your server.
+or
+
+```
+http://10.0.2.88:8069
+```
 
 ### Default Admin Credentials
 
@@ -73,3 +77,91 @@ The script opens the necessary ports:
 - **Odoo:** TCP port `8069`
 - **SSH:** TCP port `22`
 
+## Logs
+
+- **Odoo logs:** `/var/log/odoo/odoo.log`
+
+## Additional Configuration
+
+### Secure Odoo with SSL (Optional)
+
+For better security, you might want to set up a reverse proxy with Nginx and secure it using SSL certificates from Let's Encrypt.
+
+### Example Nginx Configuration
+
+1. **Install Nginx**
+
+   ```bash
+   sudo apt install nginx -y
+   ```
+
+2. **Install Certbot**
+
+   ```bash
+   sudo apt install certbot python3-certbot-nginx -y
+   ```
+
+3. **Obtain SSL Certificate**
+
+   ```bash
+   sudo certbot --nginx -d portal.aenzbi.bi -d www.portal.aenzbi.bi
+   ```
+
+4. **Configure Nginx**
+
+   Edit the Nginx configuration file for Odoo:
+
+   ```bash
+   sudo nano /etc/nginx/sites-available/odoo
+   ```
+
+   Add the following configuration:
+
+   ```nginx
+   server {
+       listen 80;
+       server_name portal.aenzbi.bi www.portal.aenzbi.bi;
+
+       location / {
+           proxy_pass http://127.0.0.1:8069;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       location ~* /web/static/ {
+           proxy_cache_valid 200 90m;
+           proxy_buffering on;
+           expires 864000;
+           proxy_pass http://127.0.0.1:8069;
+       }
+   }
+
+   server {
+       listen 443 ssl;
+       server_name portal.aenzbi.bi www.portal.aenzbi.bi;
+
+       ssl_certificate /etc/letsencrypt/live/portal.aenzbi.bi/fullchain.pem;
+       ssl_certificate_key /etc/letsencrypt/live/portal.aenzbi.bi/privkey.pem;
+       include /etc/letsencrypt/options-ssl-nginx.conf;
+       ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+       location / {
+           proxy_pass http://127.0.0.1:8069;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       location ~* /web/static/ {
+           proxy_cache_valid 200 90m;
+           proxy_buffering on;
+           expires 864000;
+           proxy_pass http://127.0.0.1:8069;
+       }
+   }
+   ```
+
+5.
