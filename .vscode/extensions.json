@@ -1,5 +1,9 @@
 {
     "recommendations": [
-        "waseemakram.bashnsippets"
+        "waseemakram.bashnsippets",
+        "aaron-bond.better-comments",
+        "ms-vscode.cpptools-themes",
+        "batisteo.vscode-django",
+        "mikestead.dotenv"
     ]
 }
