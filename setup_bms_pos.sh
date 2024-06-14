@@ -1,84 +1,268 @@
 #!/bin/bash
 
-# Update and upgrade the system
-sudo apt update && sudo apt upgrade -y
+# Update package list and install Node.js, npm, and PostgreSQL client
+echo "Updating package list and installing Node.js, npm, and PostgreSQL client..."
+sudo apt-get update
+sudo apt-get install -y nodejs npm postgresql-client
 
-# Install necessary dependencies
-sudo apt install python3 python3-pip build-essential wget git openjdk-11-jdk -y
+# Install necessary Node.js packages
+echo "Installing necessary Node.js packages..."
+npm install readline-sync axios pg express body-parser
 
-# Install PostgreSQL
-sudo apt install postgresql postgresql-server-dev-all -y
+# Create project directory
+echo "Setting up project directory..."
+mkdir ebms_pos
+cd ebms_pos
 
-# Start and enable PostgreSQL
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+# Create server script
+echo "Creating server script..."
+cat << 'EOF' > server.js
+const readlineSync = require('readline-sync');
+const axios = require('axios');
+const { Client } = require('pg');
+const express = require('express');
+const bodyParser = require('body-parser');
 
-# Create PostgreSQL user and database for Odoo
-sudo -u postgres createuser -s odoo
-sudo -u postgres createdb odoo
+const app = express();
+app.use(bodyParser.json());
 
-# Install wkhtmltopdf
-wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.5-1/wkhtmltox_0.12.5-1.bionic_amd64.deb
-sudo dpkg -i wkhtmltox_0.12.5-1.bionic_amd64.deb
-sudo apt install -f -y
+app.post('/setup', async (req, res) => {
+  const { dbHost, dbName, dbUser, dbPassword, apiHost, apiUsername, apiPassword } = req.body;
 
-# Clone Odoo from GitHub
-sudo git clone https://www.github.com/odoo/odoo --depth 1 --branch 15.0 --single-branch /opt/odoo
+  // Function to get Bearer Token
+  async function getBearerToken(apiHost, username, password) {
+    try {
+      const response = await axios.post(`https://${apiHost}/ebms_api/login`, {
+        username: username,
+        password: password
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data.token;
+    } catch (error) {
+      console.error('Error getting token:', error.response.data);
+      res.status(500).send('Error getting token');
+    }
+  }
 
-# Create a Python virtual environment and install requirements
-sudo apt install python3-venv -y
-cd /opt/odoo
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+  // Function to fetch sales transactions
+  async function fetchSalesTransactions(apiHost, bearerToken) {
+    try {
+      const response = await axios.get(`https://${apiHost}/ebms_api/getInvoice`, {
+        headers: {
+          'Authorization': `Bearer ${bearerToken}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching sales transactions:', error.response.data);
+      res.status(500).send('Error fetching sales transactions');
+    }
+  }
 
-# Create Odoo configuration file
-sudo tee /etc/odoo.conf > /dev/null <<EOL
-[options]
-; This is the password that allows database operations:
-admin_passwd = admin
-db_host = False
-db_port = False
-db_user = odoo
-db_password = False
-addons_path = /opt/odoo/addons
-logfile = /var/log/odoo/odoo.log
-EOL
+  // Function to insert data into the database
+  async function insertSalesData(dbHost, dbName, dbUser, dbPassword, salesData) {
+    const client = new Client({
+      host: dbHost,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName
+    });
 
-# Create systemd service for Odoo
-sudo tee /etc/systemd/system/odoo.service > /dev/null <<EOL
-[Unit]
-Description=Odoo
-Documentation=http://www.odoo.com
-[Service]
-# Ubuntu/Debian convention:
-User=odoo
-ExecStart=/opt/odoo/venv/bin/python3 /opt/odoo/odoo-bin -c /etc/odoo.conf
-[Install]
-WantedBy=default.target
-EOL
+    try {
+      await client.connect();
 
-# Start and enable the Odoo service
-sudo systemctl start odoo
-sudo systemctl enable odoo
+      for (const sale of salesData) {
+        const { invoice_id, customer_name, total_amount, sale_date } = sale;
+        await client.query(
+          `INSERT INTO sales_transactions (invoice_id, customer_name, total_amount, sale_date)
+           VALUES ($1, $2, $3, $4)`,
+          [invoice_id, customer_name, total_amount, sale_date]
+        );
+      }
+      res.send('Sales data successfully inserted into the database.');
+    } catch (error) {
+      console.error('Error inserting data:', error);
+      res.status(500).send('Error inserting data');
+    } finally {
+      await client.end();
+    }
+  }
 
-# Download and install OpenBravo POS
-wget https://downloads.sourceforge.net/project/openbravopos/releases/OpenbravoPOS-2.30.2.tar.gz
-tar -xzf OpenbravoPOS-2.30.2.tar.gz -C /opt/
+  // Main execution
+  (async () => {
+    const bearerToken = await getBearerToken(apiHost, apiUsername, apiPassword);
+    const salesData = await fetchSalesTransactions(apiHost, bearerToken);
+    await insertSalesData(dbHost, dbName, dbUser, dbPassword, salesData);
+  })();
+});
 
-# Create a script to run OpenBravo POS
-sudo tee /opt/OpenbravoPOS-2.30.2/start.sh > /dev/null <<EOL
+const port = 3000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
+EOF
+
+# Create package.json
+echo "Creating package.json..."
+cat << 'EOF' > package.json
+{
+  "name": "ebms_pos",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "pg": "^8.5.1",
+    "readline-sync": "^1.4.10"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
+EOF
+
+# Install Node.js dependencies
+echo "Installing Node.js dependencies..."
+npm install
+
+# Start the server
+echo "Starting the server..."
+npm start
 #!/bin/bash
-cd /opt/OpenbravoPOS-2.30.2
-./start.sh
-EOL
 
-sudo chmod +x /opt/OpenbravoPOS-2.30.2/start.sh
+# Update package list and install Node.js, npm, and PostgreSQL client
+echo "Updating package list and installing Node.js, npm, and PostgreSQL client..."
+sudo apt-get update
+sudo apt-get install -y nodejs npm postgresql-client
 
-# Open necessary ports in the firewall
-sudo ufw allow 8069/tcp
-sudo ufw allow 22/tcp
-sudo ufw enable
+# Install necessary Node.js packages
+echo "Installing necessary Node.js packages..."
+npm install readline-sync axios pg express body-parser
 
-echo "Setup is complete. You can access Odoo at http://<your-server-ip>:8069"
-echo "To run OpenBravo POS, execute: /opt/OpenbravoPOS-2.30.2/start.sh"
+# Create project directory
+echo "Setting up project directory..."
+mkdir ebms_pos
+cd ebms_pos
+
+# Create server script
+echo "Creating server script..."
+cat << 'EOF' > server.js
+const readlineSync = require('readline-sync');
+const axios = require('axios');
+const { Client } = require('pg');
+const express = require('express');
+const bodyParser = require('body-parser');
+
+const app = express();
+app.use(bodyParser.json());
+
+app.post('/setup', async (req, res) => {
+  const { dbHost, dbName, dbUser, dbPassword, apiHost, apiUsername, apiPassword } = req.body;
+
+  // Function to get Bearer Token
+  async function getBearerToken(apiHost, username, password) {
+    try {
+      const response = await axios.post(`https://${apiHost}/ebms_api/login`, {
+        username: username,
+        password: password
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data.token;
+    } catch (error) {
+      console.error('Error getting token:', error.response.data);
+      res.status(500).send('Error getting token');
+    }
+  }
+
+  // Function to fetch sales transactions
+  async function fetchSalesTransactions(apiHost, bearerToken) {
+    try {
+      const response = await axios.get(`https://${apiHost}/ebms_api/getInvoice`, {
+        headers: {
+          'Authorization': `Bearer ${bearerToken}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching sales transactions:', error.response.data);
+      res.status(500).send('Error fetching sales transactions');
+    }
+  }
+
+  // Function to insert data into the database
+  async function insertSalesData(dbHost, dbName, dbUser, dbPassword, salesData) {
+    const client = new Client({
+      host: dbHost,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName
+    });
+
+    try {
+      await client.connect();
+
+      for (const sale of salesData) {
+        const { invoice_id, customer_name, total_amount, sale_date } = sale;
+        await client.query(
+          `INSERT INTO sales_transactions (invoice_id, customer_name, total_amount, sale_date)
+           VALUES ($1, $2, $3, $4)`,
+          [invoice_id, customer_name, total_amount, sale_date]
+        );
+      }
+      res.send('Sales data successfully inserted into the database.');
+    } catch (error) {
+      console.error('Error inserting data:', error);
+      res.status(500).send('Error inserting data');
+    } finally {
+      await client.end();
+    }
+  }
+
+  // Main execution
+  (async () => {
+    const bearerToken = await getBearerToken(apiHost, apiUsername, apiPassword);
+    const salesData = await fetchSalesTransactions(apiHost, bearerToken);
+    await insertSalesData(dbHost, dbName, dbUser, dbPassword, salesData);
+  })();
+});
+
+const port = 3000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
+EOF
+
+# Create package.json
+echo "Creating package.json..."
+cat << 'EOF' > package.json
+{
+  "name": "ebms_pos",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "pg": "^8.5.1",
+    "readline-sync": "^1.4.10"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
+EOF
+
+# Install Node.js dependencies
+echo "Installing Node.js dependencies..."
+npm install
+
+# Start the server
+echo "Starting the server..."
+npm start
