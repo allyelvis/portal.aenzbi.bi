@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/bms-pos-setup.git"
+    "url": "git+https://github.com/allyelvis/bms-pos-setup.git"
   },
   "keywords": [
     "odoo",
@@ -18,12 +18,12 @@
     "setup",
     "script"
   ],
-  "author": "Your Name",
+  "author": "Ally Elvis Nzeyimana",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/yourusername/bms-pos-setup/issues"
   },
-  "homepage": "https://github.com/yourusername/bms-pos-setup#readme",
+  "homepage": "https://github.com/allyelvis/bms-pos-setup#readme",
   "dependencies": {
     "some-dependency": "^1.0.0"
   }
