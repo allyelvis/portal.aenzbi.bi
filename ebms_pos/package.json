@@ -5,7 +5,7 @@
   "dependencies": {
     "axios": "^0.28.0",
     "body-parser": "^1.20.3",
-    "express": "^4.21.2",
+    "express": "^4.22.1",
     "pg": "^8.5.1",
     "readline-sync": "^1.4.10"
   },
